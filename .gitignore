@@ -1,0 +1,66 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+.venv_wsl/
+venv/
+ENV/
+env/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+harmonia_checkpoints.db
+harmonia_checkpoints.db-shm
+harmonia_checkpoints.db-wal
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Ngrok
+ngrok/
+ngrok.zip
+ngrok_temp/
+
+# WhatsApp session
+whatsapp_session/
+
+# OpenCode
+opencode_checkpoints.db
+opencode_checkpoints.db-shm
+opencode_checkpoints.db-wal
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json

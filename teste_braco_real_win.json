@@ -1,0 +1,25 @@
+{
+  "plano_id": "teste-braco-real",
+  "fundamentos": [
+    {"id": "f1", "descricao": "Verificar se o braco executa arquivo real", "prioridade": 10}
+  ],
+  "etapas": [
+    {
+      "descricao": "Criar arquivo de teste",
+      "fundamentos_ids": ["f1"],
+      "acoes_propostas": [
+        {
+          "tipo": "editar_arquivo",
+          "descricao": "Criar teste_harmonia.txt com conteudo 'harmonia funcionou'",
+          "parametros": {
+            "arquivo": "teste_harmonia.txt",
+            "conteudo": "harmonia funcionou"
+          },
+          "risco": "baixo",
+          "raciocinio": "Teste de braco real - escrita de arquivo isolado",
+          "reversivel": true
+        }
+      ]
+    }
+  ]
+}

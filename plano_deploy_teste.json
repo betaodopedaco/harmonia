@@ -1,0 +1,27 @@
+{
+  "plano": {
+    "plano_id": "teste-deploy-real",
+    "fundamentos": [
+      {"id": "f1", "descricao": "Provar execucao real de ALTO risco ponta a ponta", "prioridade": 1}
+    ],
+    "etapas": [
+      {
+        "descricao": "Simular deploy criando arquivo de evidencia",
+        "fundamentos_ids": ["f1"],
+        "acoes_propostas": [
+          {
+            "tipo": "deploy_producao",
+            "descricao": "Criar o arquivo deploy_teste.txt no diretorio atual com o conteudo: deploy executado com sucesso",
+            "parametros": {},
+            "raciocinio": "Acao ALTO risco (deploy) para provar o ciclo: pausa, aprovacao e execucao real via OpenCode",
+            "impacto_estimado": "Nenhum - apenas cria arquivo local de evidencia",
+            "rollback": "Remover o arquivo deploy_teste.txt",
+            "reversivel": true,
+            "risco": "alto"
+          }
+        ]
+      }
+    ]
+  },
+  "dial": "soninho"
+}

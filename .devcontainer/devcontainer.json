@@ -1,0 +1,11 @@
+{
+  "name": "harmonia-dev",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "forwardPorts": [4096, 8081, 8099],
+  "postCreateCommand": "pip install -r requirements.txt --break-system-packages && npm install -g opencode-ai"
+}

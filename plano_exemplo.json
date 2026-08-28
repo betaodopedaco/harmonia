@@ -1,0 +1,37 @@
+{
+  "plano_id": "exemplo-hello-world",
+  "fundamentos": [
+    {"id": "f1", "descricao": "Código simples e funcional", "prioridade": 10},
+    {"id": "f2", "descricao": "Entregar funcionalidade básica", "prioridade": 8}
+  ],
+  "etapas": [
+    {
+      "descricao": "Criar arquivo principal",
+      "fundamentos_ids": ["f1", "f2"],
+      "acoes_propostas": [
+        {
+          "tipo": "editar_arquivo",
+          "descricao": "Criar hello.py com mensagem de boas-vindas",
+          "parametros": {"arquivo": "hello.py"},
+          "raciocinio": "Arquivo inicial do projeto",
+          "impacto_estimado": "Criação de arquivo local",
+          "reversivel": true
+        }
+      ]
+    },
+    {
+      "descricao": "Verificar execução",
+      "fundamentos_ids": ["f1"],
+      "acoes_propostas": [
+        {
+          "tipo": "rodar_testes",
+          "descricao": "Executar hello.py para confirmar",
+          "parametros": {"comando": "python hello.py"},
+          "raciocinio": "Confirmar que o arquivo roda",
+          "impacto_estimado": "Execução local de script",
+          "reversivel": true
+        }
+      ]
+    }
+  ]
+}

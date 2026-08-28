@@ -1,0 +1,26 @@
+﻿{
+  "plano": {
+    "plano_id": "teste-aprovacao",
+    "fundamentos": [
+      {"id": "f1", "descricao": "Deploy deve ser aprovado", "prioridade": 1}
+    ],
+    "etapas": [
+      {
+        "descricao": "Deploy em producao",
+        "fundamentos_ids": ["f1"],
+        "acoes_propostas": [
+          {
+            "tipo": "deploy_producao",
+            "descricao": "Deploy da versao 1.2.3 em producao",
+            "parametros": {"fundamentos_ids": ["f1"]},
+            "raciocinio": "Deploy em producao requer aprovacao humana",
+            "impacto_estimado": "Afeta usuarios reais em producao",
+            "reversivel": false,
+            "risco": "alto"
+          }
+        ]
+      }
+    ]
+  },
+  "dial": "soninho"
+}

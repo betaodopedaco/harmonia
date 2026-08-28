@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    command: serve --host 0.0.0.0 --port 4096
+    volumes:
+      - ./workspace:/workspace
+      - opencode-data:/home/opencode/.local/share/opencode
+      - opencode-config:/home/opencode/.config/opencode
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - harmonia-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4096/global/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  harmonia:
+    build: .
+    command: python -m harmonia.server
+    environment:
+      - OPENCODE_SERVER_URL=http://opencode:4096
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}
+      - POSTGRES_DSN=postgresql://postgres:harmonia@db:5432/harmonia
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
+      - TELEGRAM_SECRET_TOKEN=${TELEGRAM_SECRET_TOKEN}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
+    depends_on:
+      opencode:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    networks:
+      - harmonia-net
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_PASSWORD=harmonia
+      - POSTGRES_DB=harmonia
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - harmonia-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d harmonia"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  opencode-data:
+  opencode-config:
+  postgres-data:
+
+networks:
+  harmonia-net:
+    driver: bridge

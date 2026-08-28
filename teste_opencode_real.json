@@ -1,0 +1,33 @@
+{
+  "plano": {
+    "plano_id": "teste-opencode-real",
+    "fundamentos": [
+      {
+        "id": "f1",
+        "descricao": "Testar OpenCode real",
+        "prioridade": 1
+      }
+    ],
+    "etapas": [
+      {
+        "id": "e1",
+        "descricao": "Criar arquivo via OpenCode",
+        "fundamentos_ids": ["f1"],
+        "acoes_propostas": [
+          {
+            "tipo": "editar_arquivo",
+            "descricao": "Criar arquivo de teste via OpenCode real",
+            "parametros": {
+              "arquivo": "/workspaces/harmonia/teste_opencode_real.txt",
+              "conteudo": "OpenCode real funcionou!"
+            },
+            "risco": "baixo",
+            "raciocinio": "Teste de aceitacao",
+            "reversivel": true
+          }
+        ]
+      }
+    ]
+  },
+  "dial": "soninho"
+}
