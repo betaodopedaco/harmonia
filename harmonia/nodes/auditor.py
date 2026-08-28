@@ -16,123 +16,98 @@ from harmonia.graph.state import (
 from harmonia.integrations.opencode_client import OpenCodeClient, OpenCodeConfig
 
 
+# Prompt SIMPLIFICADO e DIRETO - foco em coisas concretas e acionáveis
 AUDITOR_PROMPT = """
-Você é o Auditor do Harmonia. Sua tarefa é escanear o repositório atual e identificar
-tudo que precisa ser feito: TODOs, testes faltando, bugs óbvios, código incompleto,
-deuda técnica, documentação faltando, etc.
+Scan this repository and find CONCRETE, ACTIONABLE issues. Return ONLY valid JSON.
 
-Escaneie o repositório inteiro (use ferramentas de leitura de arquivo, busca, listagem).
-Foque em:
-1. Arquivos com TODO/FIXME/HACK/XXX nos comentários
-2. Funções/classes com "pass" ou "raise NotImplementedError"
-3. Testes faltando (arquivos de teste ausentes para módulos principais)
-4. Código duplicado óbvio
-5. Tratamento de erro ausente (try/except faltando)
-6. Logs/prints de debug que deveriam ser removidos
-7. Configurações hardcoded que deveriam ser variáveis de ambiente
-8. Segurança: secrets hardcoded, SQL injection risks, etc.
-9. Performance: loops desnecessários, queries N+1, etc.
-9. Documentação: funções públicas sem docstring, README desatualizado
+Focus on THESE specific patterns (use grep/read tools):
+1. TODO/FIXME/HACK/XXX comments in .py files
+2. Functions with "pass" or "raise NotImplementedError" as only body
+3. Missing tests: .py files in harmonia/ without corresponding test_*.py in tests/
+4. Hardcoded secrets/tokens (grep for "ghp_", "nvapi_", "sk-", "api_key")
+5. print() statements that should be logging
+6. Bare "except:" or "except Exception:" without specific handling
 
-Para cada item encontrado, crie uma ação proposta com:
-- tipo: categoria da ação (ex: "refatorar", "criar_teste", "corrigir_bug", "documentar", "remover_debug", "mover_config", "corrigir_seguranca", "otimizar")
-- descricao: descrição clara e acionável do que fazer
-- parametros: dict com detalhes (arquivo, linha, contexto)
-- risco: "baixo" | "medio" | "alto" (baixo = refatoração interna/testes; medio = refatoração visível/config; alto = segurança/produção/dados)
-- raciocinio: por que isso precisa ser feito
-- impacto_estimado: descrição do impacto se não for feito
-- rollback: como desfazer se der errado
-- reversivel: true/false
-
-Retorne APENAS um JSON válido com esta estrutura:
+Return ONLY this JSON structure:
 {
-  "fundamentos": [
-    {"id": "f1", "descricao": "Descrição do fundamento", "prioridade": 1}
-  ],
-  "etapas": [
-    {
-      "id": "e1",
-      "descricao": "Descrição da etapa",
-      "fundamentos_ids": ["f1"],
-      "acoes_propostas": [
-        {
-          "tipo": "criar_teste",
-          "descricao": "Criar testes unitários para módulo X",
-          "parametros": {"arquivo": "src/modulo.py", "funcao": "funcao_x"},
-          "raciocinio": "Módulo X não tem testes e é crítico",
-          "impacto_estimado": "Sem testes, regressões não são detectadas",
-          "rollback": "Remover arquivo de teste criado",
-          "reversivel": true,
-          "risco": "baixo"
-        }
-      ]
-    }
-  ]
+  "fundamentos": [{"id": "f1", "descricao": "Brief reason", "prioridade": 1}],
+  "etapas": [{
+    "id": "e1",
+    "descricao": "Brief stage name",
+    "fundamentos_ids": ["f1"],
+    "acoes_propostas": [{
+      "tipo": "corrigir_bug|criar_teste|remover_debug|corrigir_seguranca|refatorar|documentar",
+      "descricao": "Specific action: what file, what to do",
+      "parametros": {"arquivo": "path/to/file.py", "linha": 123},
+      "raciocinio": "Why this matters",
+      "impacto_estimado": "Impact if not fixed",
+      "rollback": "How to undo",
+      "reversivel": true,
+      "risco": "baixo|medio|alto"
+    }]
+  }]
 }
 
-IMPORTANTE: Retorne APENAS o JSON, sem texto adicional, sem markdown, sem explicações.
+ONLY JSON. No markdown. No explanations.
 """
 
-
 async def _get_repo_context() -> str:
-    """Coleta contexto do repositório: estrutura, arquivos principais, etc."""
+    """Contexto rápido do repo - apenas essenciais."""
     context_parts = []
     
-    # Estrutura de diretórios
+    # Apenas arquivos .py principais (exclui node_modules, .git, __pycache__, .venv, baileys_server)
     try:
         result = subprocess.run(
-            ["find", "/workspaces/harmonia", "-type", "f", "-name", "*.py", 
+            ["find", "/workspaces/harmonia", "-type", "f", "-name", "*.py",
              "!", "-path", "*/node_modules/*", "!", "-path", "*/.git/*",
-             "!", "-path", "*/__pycache__/*", "!", "-path", "*/.venv/*"],
-            capture_output=True, text=True, timeout=30, cwd="/workspaces/harmonia"
+             "!", "-path", "*/__pycache__/*", "!", "-path", "*/.venv/*",
+             "!", "-path", "*/baileys_server/*"],
+            capture_output=True, text=True, timeout=15, cwd="/workspaces/harmonia"
         )
-        py_files = result.stdout.strip().split('\n')[:50]
-        context_parts.append(f"Arquivos Python ({len(py_files)} encontrados):\n" + "\n".join(py_files))
+        py_files = [f for f in result.stdout.strip().split('\n') if f and not f.endswith('.pyc')]
+        context_parts.append(f"Python files ({len(py_files)}):\n" + "\n".join(py_files[:30]))
     except Exception:
         pass
     
-    # Git status
+    # Git status rápido
     try:
         result = subprocess.run(
             ["git", "status", "--short"],
-            capture_output=True, text=True, timeout=10, cwd="/workspaces/harmonia"
+            capture_output=True, text=True, timeout=5, cwd="/workspaces/harmonia"
         )
         if result.stdout.strip():
-            context_parts.append(f"Git status:\n{result.stdout}")
+            context_parts.append(f"Git changes:\n{result.stdout.strip()}")
     except Exception:
         pass
     
-    # Últimos commits
-    try:
-        result = subprocess.run(
-            ["git", "log", "--oneline", "-10"],
-            capture_output=True, text=True, timeout=10, cwd="/workspaces/harmonia"
-        )
-        context_parts.append(f"Últimos commits:\n{result.stdout}")
-    except Exception:
-        pass
-    
-    return "\n\n".join(context_parts)
+    return "\n\n".join(context_parts)[:3000]  # Limita contexto
 
 
 async def _run_auditor_prompt(opencode_client: OpenCodeClient, prompt: str) -> str:
-    """Executa o prompt do auditor no OpenCode e retorna a resposta."""
+    """Executa prompt do auditor com timeout reduzido."""
     session_title = f"auditor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     
-    resultado = await opencode_client.execute(
-        prompt=prompt,
-        session_title=session_title,
-        model="nvidia/nemotron-3-ultra",
+    resultado = await asyncio.wait_for(
+        opencode_client.execute(
+            prompt=prompt,
+            session_title=session_title,
+            model="nvidia/nemotron-3-ultra",
+            timeout=120.0,  # 2 min max
+        ),
+        timeout=130.0
     )
     
     if not resultado.success:
         raise RuntimeError(f"Auditor falhou: {resultado.error}")
     
-    # Extrair texto da resposta
+    # Extrair texto - resultado.messages pode ser lista de dicts ou strings
     output_parts = []
     for part in resultado.messages:
-        if isinstance(part, dict) and part.get("type") == "text":
-            output_parts.append(part.get("text", ""))
+        if isinstance(part, dict):
+            if part.get("type") == "text":
+                output_parts.append(part.get("text", ""))
+            elif part.get("type") == "tool":
+                output_parts.append(f"[Tool: {part.get('tool', '?')}]")
         elif isinstance(part, str):
             output_parts.append(part)
     
@@ -224,64 +199,89 @@ def _converter_plano_para_estado(plano_json: dict, state: HarmoniaState) -> Harm
 async def auditor(state: HarmoniaState) -> dict:
     """
     Nó Auditor: escaneia o repositório via OpenCode e gera plano de ações.
+    Versão otimizada: prompt simplificado, timeout 2.5min, parsing robusto.
     """
     print("[AUDITOR] Iniciando auditoria do repositório...")
     
-    # Coletar contexto do repo
-    repo_context = await _get_repo_context()
-    
-    # Prompt completo
-    prompt = AUDITOR_PROMPT + f"\n\nContexto do repositório:\n{repo_context}"
-    
-    # Criar cliente OpenCode
-    config = OpenCodeConfig(
-        server_url=os.getenv("OPENCODE_SERVER_URL", "http://localhost:4096"),
-        password=os.getenv("OPENCODE_SERVER_PASSWORD", ""),
-    )
-    client = OpenCodeClient(config)
-    await client.connect()
-    
+    client = None
     try:
-        # Executar auditor
-        resposta = await _run_auditor_prompt(client, prompt)
-        print(f"[AUDITOR] Resposta recebida ({len(resposta)} chars)")
+        # Coletar contexto do repo (rápido)
+        repo_context = await _get_repo_context()
+        print(f"[AUDITOR] Contexto coletado: {len(repo_context)} chars")
         
-        # Parsear resposta
-        plano_json = _parse_auditor_response(resposta)
-        print(f"[AUDITOR] Plano parseado: {len(plano_json.get('etapas', []))} etapas, "
-              f"{sum(len(e.get('acoes_propostas', [])) for e in plano_json.get('etapas', []))} ações")
+        # Criar cliente OpenCode
+        config = OpenCodeConfig(
+            server_url=os.getenv("OPENCODE_SERVER_URL", "http://localhost:4096"),
+            password=os.getenv("OPENCODE_SERVER_PASSWORD", ""),
+        )
+        client = OpenCodeClient(config)
+        await client.connect()
         
-        # Converter para estado
-        novo_state = _converter_plano_para_estado(plano_json, state)
-        
-        # Log
-        total_acoes = len(novo_state.get("acoes_pendentes", []))
-        print(f"[AUDITOR] Plano gerado: {len(novo_state.get('fundamentos', []))} fundamentos, "
-              f"{len(novo_state.get('etapas', []))} etapas, {total_acoes} ações")
-        
-        return {
-            "fundamentos": novo_state["fundamentos"],
-            "etapas": novo_state["etapas"],
-            "acoes_pendentes": novo_state["acoes_pendentes"],
-            "metadata": {
-                **state.get("metadata", {}),
-                "auditoria_gerada_em": datetime.now().isoformat(),
-                "total_acoes_geradas": total_acoes,
+        try:
+            # Executar auditor com timeout total
+            resposta = await asyncio.wait_for(
+                _run_auditor_prompt(client, AUDITOR_PROMPT + f"\n\nContexto do repositório:\n{repo_context}"),
+                timeout=150.0  # 2.5 min total
+            )
+            print(f"[AUDITOR] Resposta bruta: {len(resposta)} chars")
+            
+            # Parsear resposta
+            plano_json = _parse_auditor_response(resposta)
+            total_acoes = sum(len(e.get('acoes_propostas', [])) for e in plano_json.get('etapas', []))
+            print(f"[AUDITOR] Plano parseado: {len(plano_json.get('etapas', []))} etapas, {total_acoes} ações")
+            
+            if total_acoes == 0:
+                print("[AUDITOR] WARNING: Nenhuma ação gerada pelo auditor")
+            
+            # Converter para estado
+            novo_state = _converter_plano_para_estado(plano_json, state)
+            
+            total_acoes_final = len(novo_state.get("acoes_pendentes", []))
+            print(f"[AUDITOR] Plano final: {len(novo_state.get('fundamentos', []))} fundamentos, "
+                  f"{len(novo_state.get('etapas', []))} etapas, {total_acoes_final} ações")
+            
+            return {
+                "fundamentos": novo_state["fundamentos"],
+                "etapas": novo_state["etapas"],
+                "acoes_pendentes": novo_state["acoes_pendentes"],
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "auditoria_gerada_em": datetime.now().isoformat(),
+                    "total_acoes_geradas": total_acoes_final,
+                }
             }
-        }
-        
+            
+        except asyncio.TimeoutError:
+            print("[AUDITOR] TIMEOUT: Auditor excedeu 2.5 min")
+            return {
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "auditoria_erro": "Timeout: auditor excedeu 2.5 min",
+                    "auditoria_gerada_em": datetime.now().isoformat(),
+                }
+            }
+        except Exception as e:
+            print(f"[AUDITOR] Erro: {e}")
+            return {
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "auditoria_erro": str(e),
+                    "auditoria_gerada_em": datetime.now().isoformat(),
+                }
+            }
+        finally:
+            if client:
+                await client.close()
+            
     except Exception as e:
-        print(f"[AUDITOR] Erro: {e}")
-        # Em caso de erro, retorna estado sem alterações mas com erro no metadata
+        print(f"[AUDITOR] Erro crítico: {e}")
         return {
             "metadata": {
                 **state.get("metadata", {}),
-                "auditoria_erro": str(e),
+                "auditoria_erro": f"Erro crítico: {e}",
                 "auditoria_gerada_em": datetime.now().isoformat(),
             }
         }
-    finally:
-        await client.close()
 
 
 # Função wrapper para compatibilidade com o grafo
