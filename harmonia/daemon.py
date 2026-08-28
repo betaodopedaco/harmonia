@@ -81,6 +81,64 @@ class HarmoniaDaemon:
         async def health():
             return {"status": "ok", "daemon": "running"}
         
+        @app.post("/auditoria")
+        async def trigger_auditoria(request: Request):
+            """Dispara o auditor para escanear o repo e gerar/executar plano."""
+            body = await request.json()
+            dial = body.get("dial", "soninho")
+            thread_id = body.get("thread_id", f"auditoria-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+            
+            print(f"[DAEMON] Auditor disparado: thread_id={thread_id}, dial={dial}")
+            
+            # Estado inicial vazio - o auditor vai gerar o plano
+            state = criar_estado_inicial(
+                plano_id=thread_id,
+                fundamentos=[],
+                etapas=[],
+                dial=dial,
+            )
+            
+            config = {"configurable": {"thread_id": thread_id}}
+            
+            try:
+                resultado = await self.graph.ainvoke(state, config=config)
+                
+                fila = resultado.get("fila_aprovacao", [])
+                execs = resultado.get("acoes_executadas", [])
+                pendentes = resultado.get("acoes_pendentes", [])
+                
+                response = {
+                    "thread_id": thread_id,
+                    "status": "pausado" if fila else "concluido",
+                    "acoes_executadas": len(execs),
+                    "acoes_pendentes": len(pendentes),
+                    "fila_aprovacao": len(fila),
+                    "mensagem_final": resultado.get("mensagem_final", ""),
+                }
+                
+                if fila:
+                    solicitacao = fila[-1]
+                    acao_descricao = ""
+                    for acao in pendentes:
+                        if acao.get("id") == solicitacao.get("acao_id"):
+                            acao_descricao = acao.get("descricao", "")
+                            break
+                    response["solicitacao"] = {
+                        "solicitacao_id": solicitacao.get("id"),
+                        "acao_id": solicitacao.get("acao_id"),
+                        "mensagem": solicitacao.get("mensagem"),
+                        "confirmacao_qualificada": solicitacao.get("confirmacao_qualificada", False),
+                        "acao_descricao": acao_descricao,
+                    }
+                
+                return response
+                
+            except Exception as e:
+                return JSONResponse(
+                    status_code=500,
+                    content={"erro": str(e), "thread_id": thread_id}
+                )
+        
         return app
     
     async def iniciar(self):
@@ -94,10 +152,11 @@ class HarmoniaDaemon:
         
         print(f"[DAEMON] Rodando em http://{self.host}:{self.port}")
         print("[DAEMON] Endpoints:")
-        print("  POST /plano     - Submeter novo plano")
-        print("  POST /aprovar   - Enviar aprovação para thread pausada")
+        print("  POST /plano      - Submeter novo plano")
+        print("  POST /auditoria  - Disparar auditoria automática")
+        print("  POST /aprovar    - Enviar aprovação para thread pausada")
         print("  GET  /status/{thread_id} - Ver status de um plano")
-        print("  GET  /health    - Health check")
+        print("  GET  /health     - Health check")
     
     async def _keepalive_loop(self):
         """Task em background que roda a cada 20 min para evitar hibernação do Codespace."""

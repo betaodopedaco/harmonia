@@ -9,6 +9,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from harmonia.graph.state import HarmoniaState, DialAutonomia, make_fundamento, make_etapa_plano, make_acao_proposta
+from harmonia.nodes.auditor import auditor_node
 from harmonia.nodes.classificador_risco import classificar_risco
 from harmonia.nodes.roteador_autonomia import rotear_autonomia
 from harmonia.nodes.fila_aprovacao import preparar_aprovacao, aguardar_aprovacao
@@ -108,6 +109,7 @@ def _deve_continuar_apos_subplano(state: HarmoniaState) -> Literal["reintegrar",
 def compilar_sem_checkpoint() -> StateGraph:
     workflow = StateGraph(HarmoniaState)
     
+    workflow.add_node("auditor", auditor_node)
     workflow.add_node("classificar_risco", classificar_risco)
     workflow.add_node("rotear_autonomia", rotear_autonomia)
     workflow.add_node("preparar_aprovacao", preparar_aprovacao)
@@ -116,8 +118,9 @@ def compilar_sem_checkpoint() -> StateGraph:
     workflow.add_node("processar_subplano", processar_subplano)
     workflow.add_node("autoavaliar", autoavaliar)
     
-    workflow.set_entry_point("classificar_risco")
+    workflow.set_entry_point("auditor")
     
+    workflow.add_edge("auditor", "classificar_risco")
     workflow.add_edge("classificar_risco", "rotear_autonomia")
     
     workflow.add_conditional_edges(
