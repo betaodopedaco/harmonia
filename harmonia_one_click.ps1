@@ -30,8 +30,8 @@ if (Test-Path $envPath) {
 }
 
 $githubToken = $env:GITHUB_TOKEN
-$codespaceName = $env:CODESPACE_NAME ?? "harmonia-dev"
-$githubRepo = $env:GITHUB_REPO ?? "betaodopedaco/harmonia"
+$codespaceName = if ($env:CODESPACE_NAME) { $env:CODESPACE_NAME } else { "harmonia-dev" }
+$githubRepo = if ($env:GITHUB_REPO) { $env:GITHUB_REPO } else { "betaodopedaco/harmonia" }
 
 if (-not $env:GITHUB_TOKEN) {
     Write-Host "[ERRO] GITHUB_TOKEN nao encontrado no .env local" -ForegroundColor Red
