@@ -1,0 +1,36 @@
+name: Keep-Alive Codespace
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'  # A cada 20 minutos
+  workflow_dispatch:  # Permite execução manual
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Ping daemon health endpoint
+        run: |
+          echo "🔄 Keep-alive ping..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/health || echo "000")
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Daemon saudável (HTTP 200)"
+          else
+            echo "⚠️ Daemon não respondeu (HTTP $RESPONSE) - tentando acordar..."
+            # Tenta acordar o Codespace via GitHub API se necessário
+            if [ -n "${{ secrets.GITHUB_TOKEN }}" ] && [ -n "${{ vars.CODESPACE_NAME }}" ]; then
+              curl -X POST \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/user/codespaces/${{ vars.GITHUB_REPO }}/${{ vars.CODESPACE_NAME }}/start" \
+                -s -o /dev/null -w "Wake response: %{http_code}\n" || true
+            fi
+          fi
+
+      - name: Ping OpenCode Server
+        run: |
+          echo "🔄 Ping OpenCode Server..."
+          curl -s -o /dev/null -w "OpenCode: %{http_code}\n" http://localhost:4096/global/health || echo "OpenCode: failed"

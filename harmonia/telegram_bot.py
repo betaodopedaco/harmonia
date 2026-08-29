@@ -29,10 +29,14 @@ DAEMON_URL = os.getenv("DAEMON_URL", "http://localhost:8081")
 OPENCODE_URL = os.getenv("OPENCODE_SERVER_URL", "http://localhost:4096")
 OPENCODE_PASSWORD = os.getenv("OPENCODE_SERVER_PASSWORD", "")
 ALLOWED_USERS = [int(x) for x in os.getenv("TELEGRAM_ALLOWED_USERS", "").split(",") if x.strip()]
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_REPO = os.getenv("GITHUB_REPO", "betaodopedaco/harmonia")  # owner/repo
+CODESPACE_NAME = os.getenv("CODESPACE_NAME", "")  # ex: "harmonia-dev"
 PROJECT_ROOT = Path(__file__).parent.parent
 CHAT_ID_FILE = PROJECT_ROOT / ".telegram_chat_id"
 
 API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+GITHUB_API = "https://api.github.com"
 
 _offset = 0
 
@@ -41,6 +45,36 @@ _aguardando_qualificacao: dict[int, dict] = {}
 
 # Ligadão: chat_id -> OpenCodeClient ativo
 _ligado_sessions: dict[int, "LigadoSession"] = {}
+
+
+async def acordar_codespace(chat_id: int) -> dict:
+    """Acorda o Codespace via GitHub API."""
+    if not GITHUB_TOKEN:
+        return {"ok": False, "erro": "GITHUB_TOKEN não configurado no .env"}
+    
+    if not CODESPACE_NAME:
+        return {"ok": False, "erro": "CODESPACE_NAME não configurado no .env (ex: harmonia-dev)"}
+    
+    url = f"{GITHUB_API}/user/codespaces/{GITHUB_REPO}/{CODESPACE_NAME}/start"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(url, headers=headers) as resp:
+                if resp.status == 202:
+                    return {"ok": True, "msg": f"Codespace '{CODESPACE_NAME}' iniciado com sucesso"}
+                elif resp.status == 200:
+                    data = await resp.json()
+                    return {"ok": True, "msg": f"Codespace já ativo: {data.get('state', 'ativo')}"}
+                else:
+                    text = await resp.text()
+                    return {"ok": False, "erro": f"GitHub API {resp.status}: {text}"}
+    except Exception as e:
+        return {"ok": False, "erro": f"Erro ao acordar Codespace: {e}"}
 
 
 def _normalizar(texto: str) -> str:
@@ -219,7 +253,7 @@ async def handle_message(msg: dict):
 
     if text == "/start":
         CHAT_ID_FILE.write_text(str(chat_id))
-        await send_message(chat_id, f"🤖 Harmonia Bot ativo.\nChat ID: {chat_id}\nModos:\n/ligado - entra no modo Ligadão (ponte OpenCode)\n/soninho - modo auditor (padrão)\n/status - saúde do daemon")
+        await send_message(chat_id, f"🤖 Harmonia Bot ativo.\nChat ID: {chat_id}\nModos:\n/ligado - entra no modo Ligadão (ponte OpenCode)\n/soninho - modo auditor (padrão)\n/acordar - acorda o Codespace se hibernou\n/status - saúde do daemon")
         print(f"[TELEGRAM BOT] Chat ID salvo: {chat_id}")
         return
 
@@ -234,6 +268,10 @@ async def handle_message(msg: dict):
     # Comandos
     if text == "/ligado":
         await _entrar_ligado(chat_id)
+        return
+    
+    if text == "/acordar":
+        await _handle_acordar(chat_id)
         return
     
     if text == "/soninho":
@@ -254,7 +292,7 @@ async def handle_message(msg: dict):
         return
 
     # Soninho (padrão): só comandos
-    await send_message(chat_id, "Comandos: /start /ligado /soninho /status")
+    await send_message(chat_id, "Comandos: /start /ligado /soninho /acordar /status")
 
 
 class LigadoSession:
@@ -376,6 +414,16 @@ async def _sair_ligado(chat_id: int):
         await send_message(chat_id, "😴 Sessão Ligadão encerrada.")
     else:
         await send_message(chat_id, "Não há sessão Ligadão ativa.")
+
+
+async def _handle_acordar(chat_id: int):
+    """Handler para /acordar - acorda o Codespace via GitHub API."""
+    await send_message(chat_id, "☕ Acordando o Codespace...")
+    resultado = await acordar_codespace(chat_id)
+    if resultado.get("ok"):
+        await send_message(chat_id, f"✅ {resultado['msg']}\n\nPode mandar `/ligado` pra continuar.")
+    else:
+        await send_message(chat_id, f"❌ Falha ao acordar: {resultado['erro']}")
 
 
 async def _ligado_enviar_prompt(chat_id: int, text: str):
