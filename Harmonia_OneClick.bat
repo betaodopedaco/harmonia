@@ -1,6 +1,6 @@
 @echo off
 REM Harmonia One-Click Launcher - Atalho para clicar duas vezes
-REM Coloque este arquivo na Área de Trabalho ou onde preferir
+REM Coloque este arquivo na Area de Trabalho ou onde preferir
 
 @echo off
 chcp 65001 >nul
